@@ -133,7 +133,7 @@ class ExampleUnifiedGenotyper extends QScript {
     brhc.out = "HaplotypeCallerVariations.vcf"
     add(brhc)
 
-    val selectSNPsHC = new SelectVariants with UnifiedGenotyperArguments
+    val selectSNPsHC = new SelectVariants with GATK_pipeline
     selectSNPsHC.variant =  hc.out
     selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
     selectSNPsHC.selectTypeToInclude = LTypeSelect
@@ -163,7 +163,7 @@ class ExampleUnifiedGenotyper extends QScript {
     post_baseRecal.scatterCount = 4
     post_baseRecal.memoryLimit = 4
     post_baseRecal.nct = 8
-    post_baseRecal.BQRS = baseRecal.out
+    post_baseRecal.BQSR = baseRecal.out
     post_baseRecal.jobResourceRequests = Seq("vf=10g")
     post_baseRecal.out = "post_recalibration_report.grp"
 
@@ -195,7 +195,7 @@ class ExampleUnifiedGenotyper extends QScript {
 
 // calling and filtering of variants
 
-    val hc = new HaplotypeCaller with UnifiedGenotyperArguments
+    val hc = new HaplotypeCaller with GATK_pipeline
 
     hc.scatterCount = 200
     hc.nct = 8
@@ -204,7 +204,7 @@ class ExampleUnifiedGenotyper extends QScript {
     hc.out = "HaplotypeCallerVariations.vcf"
     add(hc)
 
-    val selectSNPsHC = new SelectVariants with UnifiedGenotyperArguments
+    val selectSNPsHC = new SelectVariants with GATK_pipeline
     selectSNPsHC.variant =  hc.out
     selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
     selectSNPsHC.selectTypeToInclude = LTypeSelect
@@ -212,7 +212,7 @@ class ExampleUnifiedGenotyper extends QScript {
     selectSNPsHC.out = "HaplotypeCaller_biallelic_true_SNPS.qual.filtered.vcf"
     add(selectSNPsHC)
  
-    val selectIndelsHC = new SelectVariants with UnifiedGenotyperArguments
+    val selectIndelsHC = new SelectVariants with GATK_pipeline
     selectIndelsHC.variant =  hc.out
     selectIndelsHC.select = Seq("QD > 2.0 && FS < 200.0 && ReadPosRankSum > -8.0")
     selectIndelsHC.selectTypeToInclude = LtypeSelect2
