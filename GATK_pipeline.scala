@@ -24,14 +24,11 @@
 */
 
 package org.broadinstitute.gatk.queue.qscripts.examples
-
 import org.broadinstitute.gatk.queue.QScript
 import org.broadinstitute.gatk.queue.extensions.gatk._
 import org.broadinstitute.gatk.utils.variant.GATKVariantContextUtils._
-//import org.broadinstitute.gatk.tools.walkers.genotyper.GenotypeLikelihoodsCalculationModel
 import org.broadinstitute.gatk.queue.extensions.picard.MarkDuplicates
 import  org.broadinstitute.gatk.tools.walkers.varianteval.stratifications.VariantType
-//import net.sf.samtools.SAMFileReader.ValidationStringency
 
 class ExampleUnifiedGenotyper extends QScript {
   // Create an alias 'qscript' to be able to access variables
@@ -46,7 +43,8 @@ class ExampleUnifiedGenotyper extends QScript {
   // Required arguments.  All initialized to empty values.
 
   /*
-  ** Alle dieser Argumente, die einen "shortName" haben, sind Input zum initialen GATK Aufruf (Realigner)
+  ** Alle dieser Argumente, die einen "shortName" haben, sind Input zum initialen GATK Aufruf.
+  * All these arguments have to be defined with the initial call of the script:
   */
   @Input(doc="The reference file for the bam files.", shortName="R")
   var referenceFile: File = _ // _ is scala shorthand for null
@@ -59,22 +57,25 @@ class ExampleUnifiedGenotyper extends QScript {
 
   // This trait allows us set the variables below in one place,
   // and then reuse this trait on each CommandLineGATK function below.
-  trait UnifiedGenotyperArguments extends CommandLineGATK {
+  trait GATK_pipeline extends CommandLineGATK {
     this.reference_sequence = qscript.referenceFile
     this.intervals = if (qscript.intervals == null) Nil else List(qscript.intervals)
     // Set the memory limit to 2 gigabytes on each command.
     this.memoryLimit = 2
-    //this.validation_strictness = net.sf.samtools.SAMFileReader.ValidationStringency.LENIENT
-    //this.validation_strictness = "LENIENT"
-    
+
   }
 
   def script() {
     // Create the four functions that we may run depending on options.
-    val genotyper = new UnifiedGenotyper with UnifiedGenotyperArguments
-    val selectVars = new SelectVariants with UnifiedGenotyperArguments
-    val baseRecal = new BaseRecalibrator with UnifiedGenotyperArguments
-    val printReads = new PrintReads with UnifiedGenotyperArguments
+  
+
+// define, what a SNP and an InDel is. Needed for SelectVariants
+    var LTypeSelect: List[htsjdk.variant.variantcontext.VariantContext.Type] = Nil
+    LTypeSelect :+= htsjdk.variant.variantcontext.VariantContext.Type.SNP
+
+    var LtypeSelect2: List[htsjdk.variant.variantcontext.VariantContext.Type] = Nil
+    LtypeSelect2 :+= htsjdk.variant.variantcontext.VariantContext.Type.INDEL
+
     
 
 
@@ -83,28 +84,27 @@ class ExampleUnifiedGenotyper extends QScript {
     if (bamFiles.size >= 1) {
     for (bamFile <- bamFiles) {
 
-
+// deduplication and calculating metrics
     val dedup = new MarkDuplicates  
     dedup.input :+= bamFile
     dedup.output =  swapExt(bamFile, "bam", "dedup.bam")
     dedup.metrics = swapExt(bamFile, "bam", "dedup.metrics")
     dedup.REMOVE_DUPLICATES = true
     dedup.isIntermediate = true
-
-
     dedup.memoryLimit = 16
 //    dedup.analysisName = queueLogDir + outBam + ".dedup"
 //    dedup.jobName = queueLogDir + outBam + ".dedup"
 
 
-    val realigner = new RealignerTargetCreator with UnifiedGenotyperArguments
+// InDel realignement
+    val realigner = new RealignerTargetCreator with GATK_pipeline
     realigner.input_file :+= dedup.output
     realigner.scatterCount = 16
     realigner.nt = 4
     realigner.memoryLimit = 12 
     realigner.out = swapExt(bamFile, "bam", "recalibrationTargets.intervals")
 
-    val indelAligner = new IndelRealigner with UnifiedGenotyperArguments
+    val indelAligner = new IndelRealigner with GATK_pipeline
     indelAligner.input_file :+= dedup.output
     indelAligner.targetIntervals = realigner.out
     indelAligner.scatterCount = 4
@@ -121,25 +121,31 @@ class ExampleUnifiedGenotyper extends QScript {
 
 
    
+// calling and hardfiltering SNPs for BQRS
 
+    val brhc = new HaplotypeCaller with GATK_pipeline
 
-    genotyper.scatterCount = 16
-    genotyper.nct = 3
-    genotyper.nt = 2
-    genotyper.memoryLimit = 16  // 32
-    genotyper.input_file ++= realignedFiles
-    genotyper.out = "recalibrationSNPs.vcf"
-    add(genotyper)
+    brhc.scatterCount = 200
+    brhc.nct = 1
+    brhc.memoryLimit = 32
+    brhc.input_file ++= realignedFiles
+    brhc.jobResourceRequests = Seq("vf=32g")
+    brhc.out = "HaplotypeCallerVariations.vcf"
+    add(brhc)
 
-    
-    selectVars.variant = genotyper.out
-    selectVars.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && ReadPosRankSum > -8.0") 
-    selectVars.out = swapExt(genotyper.out, "vcf", "qual.filtered.vcf")
-    add(selectVars)
-
+    val selectSNPsHC = new SelectVariants with UnifiedGenotyperArguments
+    selectSNPsHC.variant =  hc.out
+    selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
+    selectSNPsHC.selectTypeToInclude = LTypeSelect
+    selectSNPsHC.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
+    selectSNPsHC.out = "recalibrationSNPS.vcf"
+    add(selectSNPsHC)
  
+// first round BQRS
+    val baseRecal = new BaseRecalibrator with GATK_pipeline
+
     baseRecal.input_file ++= realignedFiles
-    baseRecal.knownSites = Seq(selectVars.out)
+    baseRecal.knownSites = Seq(selectSNPsHC.out)
     baseRecal.scatterCount = 4
     baseRecal.memoryLimit = 4
     baseRecal.nct = 8
@@ -148,6 +154,33 @@ class ExampleUnifiedGenotyper extends QScript {
 
     add(baseRecal)
 
+//post base recalibration
+
+    val post_baseRecal = new BaseRecalibrator with GATK_pipeline
+
+    post_baseRecal.input_file ++= realignedFiles
+    post_baseRecal.knownSites = Seq(selectSNPsHC.out)
+    post_baseRecal.scatterCount = 4
+    post_baseRecal.memoryLimit = 4
+    post_baseRecal.nct = 8
+    post_baseRecal.BQRS = baseRecal.out
+    post_baseRecal.jobResourceRequests = Seq("vf=10g")
+    post_baseRecal.out = "post_recalibration_report.grp"
+
+    add(post_baseRecal)
+
+    //plotting effect of baserecalibration
+    val AnaCovar = new  AnalyzeCovariates with GATK_pipeline
+    AnaCovar.before = baseRecal.out
+    AnaCovar.after = post_baseRecal.out
+    AnaCovar.plots = "recalibration_plots.pdf"
+
+    add(AnaCovar)
+    
+    
+    // on-the-fly baserecalibration
+  
+    val printReads = new PrintReads with GATK_pipeline
 
     printReads.input_file ++= realignedFiles
     printReads.BQSR = baseRecal.out
@@ -159,42 +192,8 @@ class ExampleUnifiedGenotyper extends QScript {
 
 
 
-    val finalGenotyper = new UnifiedGenotyper with UnifiedGenotyperArguments
-    finalGenotyper.scatterCount = 16
-    finalGenotyper.nct = 3
-    finalGenotyper.nt = 2
-    finalGenotyper.memoryLimit = 24 //32
-    finalGenotyper.input_file = List[File](printReads.out)
-    finalGenotyper.out = "UnifiedGenotyperVariations.vcf"
-    finalGenotyper.genotype_likelihoods_model = org.broadinstitute.gatk.tools.walkers.genotyper.GenotypeLikelihoodsCalculationModel.Model.BOTH
-    add(finalGenotyper)
 
-
-
-    var LTypeSelect: List[htsjdk.variant.variantcontext.VariantContext.Type] = Nil
-    LTypeSelect :+= htsjdk.variant.variantcontext.VariantContext.Type.SNP
-
-    val selectSNPs = new SelectVariants with UnifiedGenotyperArguments
-    selectSNPs.variant =  finalGenotyper.out
-    selectSNPs.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && ReadPosRankSum > -8.0" ) // && MappingQualityRankSum > -12.5") // && ReadPosRankSum > -8.0")
-    selectSNPs.selectTypeToInclude = LTypeSelect
-    selectSNPs.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
-    selectSNPs.out = "UnifiedGenotyper_biallelic_true_SNPS.qual.filtered.vcf"
-    add(selectSNPs)
- 
-
-    var LtypeSelect2: List[htsjdk.variant.variantcontext.VariantContext.Type] = Nil
-    LtypeSelect2 :+= htsjdk.variant.variantcontext.VariantContext.Type.INDEL
-
-    val selectIndels = new SelectVariants with UnifiedGenotyperArguments
-    selectIndels.variant =  finalGenotyper.out
-    selectIndels.select = Seq("QD > 2.0 && FS < 200.0 && ReadPosRankSum > -8.0")
-    selectIndels.selectTypeToInclude = LtypeSelect2
-    selectIndels.restrictAllelesTo = org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
-    selectIndels.out = "UnifiedGenotyper_biallelic_true_INDELS.qual.filtered.vcf"
-    add(selectIndels)
-
-
+// calling and filtering of variants
 
     val hc = new HaplotypeCaller with UnifiedGenotyperArguments
 
@@ -207,7 +206,7 @@ class ExampleUnifiedGenotyper extends QScript {
 
     val selectSNPsHC = new SelectVariants with UnifiedGenotyperArguments
     selectSNPsHC.variant =  hc.out
-    selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && ReadPosRankSum > -8.0" ) 
+    selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
     selectSNPsHC.selectTypeToInclude = LTypeSelect
     selectSNPsHC.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
     selectSNPsHC.out = "HaplotypeCaller_biallelic_true_SNPS.qual.filtered.vcf"
