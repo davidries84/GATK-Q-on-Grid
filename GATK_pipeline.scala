@@ -134,7 +134,7 @@ class ExampleUnifiedGenotyper extends QScript {
     add(brhc)
 
     val selectSNPsHC = new SelectVariants with GATK_pipeline
-    selectSNPsHC.variant =  hc.out
+    selectSNPsHC.variant =  brhc.out
     selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
     selectSNPsHC.selectTypeToInclude = LTypeSelect
     selectSNPsHC.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
