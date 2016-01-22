@@ -204,13 +204,13 @@ class ExampleUnifiedGenotyper extends QScript {
     hc.out = "HaplotypeCallerVariations.vcf"
     add(hc)
 
-    val selectSNPsHC = new SelectVariants with GATK_pipeline
-    selectSNPsHC.variant =  hc.out
-    selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
-    selectSNPsHC.selectTypeToInclude = LTypeSelect
-    selectSNPsHC.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
-    selectSNPsHC.out = "HaplotypeCaller_biallelic_true_SNPS.qual.filtered.vcf"
-    add(selectSNPsHC)
+    val selectSNPsHC2 = new SelectVariants with GATK_pipeline
+    selectSNPsHC2.variant =  hc.out
+    selectSNPsHC2.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
+    selectSNPsHC2.selectTypeToInclude = LTypeSelect
+    selectSNPsHC2.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
+    selectSNPsHC2.out = "HaplotypeCaller_biallelic_true_SNPS.qual.filtered.vcf"
+    add(selectSNPsHC2)
  
     val selectIndelsHC = new SelectVariants with GATK_pipeline
     selectIndelsHC.variant =  hc.out
