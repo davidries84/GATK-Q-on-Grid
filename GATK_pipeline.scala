@@ -60,8 +60,8 @@ class pipeline extends QScript {
   trait GATK_pipeline extends CommandLineGATK {
     this.reference_sequence = qscript.referenceFile
     this.intervals = if (qscript.intervals == null) Nil else List(qscript.intervals)
-    // Set the memory limit to 2 gigabytes on each command.
-    this.memoryLimit = 2
+    // Set the memory limit to 4 gigabytes on each command.
+    this.memoryLimit = 4
 
   }
 
@@ -94,7 +94,9 @@ class pipeline extends QScript {
     dedup.metrics = swapExt(bamFile, "bam", "dedup.metrics")
     dedup.REMOVE_DUPLICATES = true
     dedup.isIntermediate = true
-    dedup.memoryLimit = 16
+    dedup.memoryLimit = 4 // seems to be most stable with 4G of mem, not more
+    dedup.jobResourceRequests = Seq("vf=4g")
+
 //    dedup.analysisName = queueLogDir + outBam + ".dedup"
 //    dedup.jobName = queueLogDir + outBam + ".dedup"
 
@@ -105,6 +107,8 @@ class pipeline extends QScript {
     realigner.scatterCount = 16
     realigner.nt = 4
     realigner.memoryLimit = 12 
+    realigner.jobResourceRequests = Seq("vf=48g")
+
     realigner.out = swapExt(bamFile, "bam", "recalibrationTargets.intervals")
 
     val indelAligner = new IndelRealigner with GATK_pipeline
@@ -112,6 +116,8 @@ class pipeline extends QScript {
     indelAligner.targetIntervals = realigner.out
     indelAligner.scatterCount = 4
     indelAligner.memoryLimit = 4
+    indelAligner.jobResourceRequests = Seq("vf=4g")
+
     indelAligner.out = swapExt(bamFile, "bam", "realigned.bam")
     indelAligner.isIntermediate = true
     realignedFiles :+= indelAligner.out
@@ -154,7 +160,7 @@ class pipeline extends QScript {
     baseRecal.scatterCount = 4
     baseRecal.memoryLimit = 4
     baseRecal.nct = 8
-    baseRecal.jobResourceRequests = Seq("vf=10g")
+    baseRecal.jobResourceRequests = Seq("vf=4g")
     baseRecal.out = "recalibration_report.grp"
 
     add(baseRecal)
@@ -169,7 +175,7 @@ class pipeline extends QScript {
     post_baseRecal.memoryLimit = 4
     post_baseRecal.nct = 8
     post_baseRecal.BQSR = baseRecal.out
-    post_baseRecal.jobResourceRequests = Seq("vf=10g")
+    post_baseRecal.jobResourceRequests = Seq("vf=4g")
     post_baseRecal.out = "post_recalibration_report.grp"
 
     add(post_baseRecal)
@@ -191,6 +197,8 @@ class pipeline extends QScript {
     printReads.BQSR = baseRecal.out
     printReads.nct = 8
     printReads.memoryLimit = 4
+    printReads.jobResourceRequests = Seq("vf=4g")
+
     printReads.out = "recalibrated.bam"
 
     var recalibratedFile: List[File] = Nil
@@ -208,6 +216,8 @@ class pipeline extends QScript {
     hc.scatterCount = 200
     hc.nct = 8
     hc.memoryLimit = 32
+    hc.jobResourceRequests = Seq("vf=32g")
+
     hc.input_file = List[File](printReads.out)
     hc.out = "HaplotypeCallerVariations.vcf"
     add(hc)
