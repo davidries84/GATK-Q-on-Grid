@@ -13,4 +13,4 @@ export JAVA_HOME
 
 # run Queue
 # parameters have to be set according to your files and system
-LD_LIBRARY_PATH=/vol/codine-6.2/lib/lx24-amd64/ java -d64 -Djava.library.path=/vol/codine-6.2/lib/lx24-amd64/ -Djava.io.tmpdir=/vol/codine-tmp -jar  /prj/gf-nugget/bin/Queue-3.2-2/Queue.jar   -S /prj/gf-nugget/scripts/GATK_pipeline.scala -R /prj/gf-nugget/processed-data/Assemblies/beet/RefBeet-1.2/RefBeet-1.2.joined.fa  -I red_merged.bam -I green_merged.bam  -jobRunner GridEngine   --job_parallel_env multislot  -jobResReq vf=5g -retry 1   -jobNative " -v PATH=/vol/biotools/bin:/vol/r-2.15/bin: -v  LD_LIBRARY_PATH=/vol/codine-6.2/lib/lx24-amd64/: -l arch=lx24-amd64"
+LD_LIBRARY_PATH=/vol/codine-6.2/lib/lx24-amd64/ java -d64 -Djava.library.path=/vol/codine-6.2/lib/lx24-amd64/ -Djava.io.tmpdir=/vol/codine-tmp -jar  Queue.jar   -S GATK_pipeline.scala -R Ref.fasta  -I 1.rg.bam -I  2.rg.bam  -jobRunner GridEngine   --job_parallel_env multislot  -jobResReq vf=5g -retry 1  -jobNative " -v PATH=/vol/biotools/bin:/vol/r-2.15/bin: -v  LD_LIBRARY_PATH=/vol/codine-6.2/lib/lx24-amd64/: -l arch=lx24-amd64"

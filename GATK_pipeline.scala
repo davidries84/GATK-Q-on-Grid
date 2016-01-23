@@ -30,10 +30,10 @@ import org.broadinstitute.gatk.utils.variant.GATKVariantContextUtils._
 import org.broadinstitute.gatk.queue.extensions.picard.MarkDuplicates
 import  org.broadinstitute.gatk.tools.walkers.varianteval.stratifications.VariantType
 
-class ExampleUnifiedGenotyper extends QScript {
+class pipeline extends QScript {
   // Create an alias 'qscript' to be able to access variables
-  // in the ExampleUnifiedGenotyper.
-  // 'qscript' is now the same as 'ExampleUnifiedGenotyper.this'
+  // in the pipeline.
+  // 'qscript' is now the same as 'pipeline.this'
   qscript =>
 
 
@@ -81,6 +81,9 @@ class ExampleUnifiedGenotyper extends QScript {
 
     var realignedFiles: List[File] = Nil
 
+
+
+// deduplication and indel realignement for each file separately
     if (bamFiles.size >= 1) {
     for (bamFile <- bamFiles) {
 
@@ -120,6 +123,7 @@ class ExampleUnifiedGenotyper extends QScript {
     }
 
 
+// from here on the files are processed together
    
 // calling and hardfiltering SNPs for BQRS
 
@@ -130,7 +134,8 @@ class ExampleUnifiedGenotyper extends QScript {
     brhc.memoryLimit = 32
     brhc.input_file ++= realignedFiles
     brhc.jobResourceRequests = Seq("vf=32g")
-    brhc.out = "HaplotypeCallerVariations.vcf"
+    brhc.out = "recalibration_HaplotypeCallerVariations.vcf"
+
     add(brhc)
 
     val selectSNPsHC = new SelectVariants with GATK_pipeline
@@ -187,6 +192,9 @@ class ExampleUnifiedGenotyper extends QScript {
     printReads.nct = 8
     printReads.memoryLimit = 4
     printReads.out = "recalibrated.bam"
+
+    var recalibratedFile: List[File] = Nil
+    recalibratedFile :+= printReads.out
 
     add(printReads)    
 
