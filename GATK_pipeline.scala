@@ -28,7 +28,9 @@ import org.broadinstitute.gatk.queue.QScript
 import org.broadinstitute.gatk.queue.extensions.gatk._
 import org.broadinstitute.gatk.utils.variant.GATKVariantContextUtils._
 import org.broadinstitute.gatk.queue.extensions.picard.MarkDuplicates
-import  org.broadinstitute.gatk.tools.walkers.varianteval.stratifications.VariantType
+import org.broadinstitute.gatk.tools.walkers.varianteval.stratifications.VariantType
+import org.broadinstitute.gatk.utils.variant.GATKVariantContextUtils
+
 
 class pipeline extends QScript {
   // Create an alias 'qscript' to be able to access variables
@@ -104,7 +106,7 @@ class pipeline extends QScript {
 // InDel realignement
     val realigner = new RealignerTargetCreator with GATK_pipeline
     realigner.input_file :+= dedup.output
-    realigner.scatterCount = 16
+    realigner.scatterCount = 100
     realigner.nt = 4
     realigner.memoryLimit = 12 
     realigner.jobResourceRequests = Seq("vf=48g")
@@ -114,16 +116,16 @@ class pipeline extends QScript {
     val indelAligner = new IndelRealigner with GATK_pipeline
     indelAligner.input_file :+= dedup.output
     indelAligner.targetIntervals = realigner.out
-    indelAligner.scatterCount = 4
+    indelAligner.scatterCount = 20
     indelAligner.memoryLimit = 4
     indelAligner.jobResourceRequests = Seq("vf=4g")
 
     indelAligner.out = swapExt(bamFile, "bam", "realigned.bam")
     indelAligner.isIntermediate = true
+
+
+
     realignedFiles :+= indelAligner.out
-
-
-
 
     add(dedup, realigner, indelAligner) }
     }
@@ -135,8 +137,8 @@ class pipeline extends QScript {
 
     val brhc = new HaplotypeCaller with GATK_pipeline
 
-    brhc.scatterCount = 200
-    brhc.nct = 1
+    brhc.scatterCount = 250
+    brhc.nct = 4
     brhc.memoryLimit = 32
     brhc.input_file ++= realignedFiles
     brhc.jobResourceRequests = Seq("vf=32g")
@@ -146,6 +148,8 @@ class pipeline extends QScript {
 
     val selectSNPsHC = new SelectVariants with GATK_pipeline
     selectSNPsHC.variant =  brhc.out
+    selectSNPsHC.nt = 4
+    selectSNPsHC.scatterCount = 20
     selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
     selectSNPsHC.selectTypeToInclude = LTypeSelect
     selectSNPsHC.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
@@ -157,9 +161,9 @@ class pipeline extends QScript {
 
     baseRecal.input_file ++= realignedFiles
     baseRecal.knownSites = Seq(selectSNPsHC.out)
-    baseRecal.scatterCount = 4
+    baseRecal.scatterCount = 200
     baseRecal.memoryLimit = 4
-    baseRecal.nct = 8
+    baseRecal.nct = 4
     baseRecal.jobResourceRequests = Seq("vf=4g")
     baseRecal.out = "recalibration_report.grp"
 
@@ -171,9 +175,9 @@ class pipeline extends QScript {
 
     post_baseRecal.input_file ++= realignedFiles
     post_baseRecal.knownSites = Seq(selectSNPsHC.out)
-    post_baseRecal.scatterCount = 4
+    post_baseRecal.scatterCount = 200
     post_baseRecal.memoryLimit = 4
-    post_baseRecal.nct = 8
+    post_baseRecal.nct = 4
     post_baseRecal.BQSR = baseRecal.out
     post_baseRecal.jobResourceRequests = Seq("vf=4g")
     post_baseRecal.out = "post_recalibration_report.grp"
@@ -195,6 +199,7 @@ class pipeline extends QScript {
 
     printReads.input_file ++= realignedFiles
     printReads.BQSR = baseRecal.out
+    printReads.scatterCount = 20
     printReads.nct = 8
     printReads.memoryLimit = 4
     printReads.jobResourceRequests = Seq("vf=4g")
@@ -213,8 +218,8 @@ class pipeline extends QScript {
 
     val hc = new HaplotypeCaller with GATK_pipeline
 
-    hc.scatterCount = 200
-    hc.nct = 8
+    hc.scatterCount = 500
+    hc.nct = 4
     hc.memoryLimit = 32
     hc.jobResourceRequests = Seq("vf=32g")
 
@@ -224,6 +229,8 @@ class pipeline extends QScript {
 
     val selectSNPsHC2 = new SelectVariants with GATK_pipeline
     selectSNPsHC2.variant =  hc.out
+    selectSNPsHC2.nt = 4
+    selectSNPsHC2.scatterCount = 20
     selectSNPsHC2.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
     selectSNPsHC2.selectTypeToInclude = LTypeSelect
     selectSNPsHC2.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
@@ -232,6 +239,7 @@ class pipeline extends QScript {
  
     val selectIndelsHC = new SelectVariants with GATK_pipeline
     selectIndelsHC.variant =  hc.out
+    selectIndelsHC.scatterCount = 20
     selectIndelsHC.select = Seq("QD > 2.0 && FS < 200.0 && ReadPosRankSum > -8.0")
     selectIndelsHC.selectTypeToInclude = LtypeSelect2
     selectIndelsHC.restrictAllelesTo = org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
@@ -239,6 +247,19 @@ class pipeline extends QScript {
     add(selectIndelsHC)
 
 
+    var variantFiles: List[File] = Nil
+    variantFiles :+= selectSNPsHC2.out
+    variantFiles :+= selectIndelsHC.out
+
+
+
+    val combineVars = new CombineVariants with GATK_pipeline
+    combineVars.variant ++= variantFiles
+    combineVars.genotypeMergeOptions = GATKVariantContextUtils.GenotypeMergeType.UNSORTED
+    combineVars.scatterCount = 20
+    combineVars.out = "CombineVariants_merged.vcf"
+    add(combineVars)
+ 
 
 
 
