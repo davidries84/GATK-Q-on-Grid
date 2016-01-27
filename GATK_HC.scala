@@ -26,7 +26,7 @@
 
 package org.broadinstitute.gatk.queue.qscripts.examples
 import org.broadinstitute.gatk.queue.QScript
-
+import org.broadinstitute.gatk.utils.variant.GATKVariantContextUtils
 import org.broadinstitute.gatk.queue.extensions.gatk._
 
 class HaplotypeCaller_pipeline extends QScript {
@@ -100,6 +100,20 @@ class HaplotypeCaller_pipeline extends QScript {
     selectIndelsHC.restrictAllelesTo = org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
     selectIndelsHC.out = "HaplotypeCaller_biallelic_true_INDELS.qual.filtered.vcf"
     add(selectIndelsHC)
+
+
+    var variantFiles: List[File] = Nil
+    variantFiles :+= selectSNPsHC.out
+    variantFiles :+= selectIndelsHC.out
+
+
+
+    val combineVars = new CombineVariants with HaplotypeCallerArguments
+    combineVars.variant ++= variantFiles
+    combineVars.genotypeMergeOptions = GATKVariantContextUtils.GenotypeMergeType.UNSORTED
+    combineVars.scatterCount = 20
+    combineVars.out = "CombineVariants_merged.vcf"
+    add(combineVars)
 
 
 

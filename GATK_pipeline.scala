@@ -107,7 +107,7 @@ class pipeline extends QScript {
     val realigner = new RealignerTargetCreator with GATK_pipeline
     realigner.input_file :+= dedup.output
     realigner.scatterCount = 100
-    realigner.nt = 4
+    realigner.nt = 3
     realigner.memoryLimit = 12 
     realigner.jobResourceRequests = Seq("vf=48g")
 
@@ -163,7 +163,7 @@ class pipeline extends QScript {
     selectIndelsHC1.selectTypeToInclude = LtypeSelect2
     selectIndelsHC1.restrictAllelesTo = org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
     selectIndelsHC1.out = "recalibrationIndels.vcf"
-    add(selectIndels1HC)
+    add(selectIndelsHC1)
 
     var recalFiles: List[File] = Nil
     recalFiles :+=  selectSNPsHC.out
