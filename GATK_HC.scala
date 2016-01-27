@@ -29,10 +29,10 @@ import org.broadinstitute.gatk.queue.QScript
 
 import org.broadinstitute.gatk.queue.extensions.gatk._
 
-class ExampleUnifiedGenotyper extends QScript {
+class HaplotypeCaller_pipeline extends QScript {
   // Create an alias 'qscript' to be able to access variables
-  // in the ExampleUnifiedGenotyper.
-  // 'qscript' is now the same as 'ExampleUnifiedGenotyper.this'
+  // in the  HaplotypeCaller.
+  // 'qscript' is now the same as ' HaplotypeCaller_pipeline.this'
   qscript =>
 
 
@@ -40,7 +40,7 @@ class ExampleUnifiedGenotyper extends QScript {
   // Required arguments.  All initialized to empty values.
 
   /*
-  ** Alle dieser Argumente, die einen "shortName" haben, sind Input zum initialen GATK Aufruf (Realigner)
+  ** Alle dieser Argumente, die einen "shortName" haben, sind Input zum initialen GATK Aufruf
   */
   @Input(doc="The reference file for the bam files.", shortName="R")
   var referenceFile: File = _ // _ is scala shorthand for null
@@ -53,19 +53,19 @@ class ExampleUnifiedGenotyper extends QScript {
 
   // This trait allows us set the variables below in one place,
   // and then reuse this trait on each CommandLineGATK function below.
-  trait UnifiedGenotyperArguments extends CommandLineGATK {
+  trait  HaplotypeCallerArguments extends CommandLineGATK {
     this.reference_sequence = qscript.referenceFile
     this.intervals = if (qscript.intervals == null) Nil else List(qscript.intervals)
-    // Set the memory limit to 2 gigabytes on each command.
-    this.memoryLimit = 12
+    // Set the memory limit to 3 gigabytes on each command.
+    this.memoryLimit = 3
     
   }
 
   def script() {
-    // Create the four functions that we may run depending on options.
+    
 
 
-
+    // setting SNP and InDel Type vars 
     var LTypeSelect: List[htsjdk.variant.variantcontext.VariantContext.Type] = Nil
     LTypeSelect :+= htsjdk.variant.variantcontext.VariantContext.Type.SNP
 
@@ -73,26 +73,28 @@ class ExampleUnifiedGenotyper extends QScript {
     LtypeSelect2 :+= htsjdk.variant.variantcontext.VariantContext.Type.INDEL
 
 
-    val hc = new HaplotypeCaller with UnifiedGenotyperArguments
+    val hc = new HaplotypeCaller with  HaplotypeCallerArguments
 
-    hc.scatterCount = 200
-    hc.nct = 1
-    hc.memoryLimit = 32
+    hc.scatterCount = 500
+    hc.nct = 3
+    hc.memoryLimit = 3
     hc.input_file ++= bamFiles
-    hc.jobResourceRequests = Seq("vf=32g")
+    hc.jobResourceRequests = Seq("vf=3g")
     hc.out = "HaplotypeCallerVariations.vcf"
     add(hc)
 
-    val selectSNPsHC = new SelectVariants with UnifiedGenotyperArguments
+    val selectSNPsHC = new SelectVariants with  HaplotypeCallerArguments
     selectSNPsHC.variant =  hc.out
-    selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && ReadPosRankSum > -8.0" ) 
+    selectSNPsHC.scatterCount = 20
+    selectSNPsHC.select =  Seq("QD > 2.0 && FS < 60.0 && MQ > 40.0 && MQRankSum > -12.5 && ReadPosRankSum > -8.0" ) 
     selectSNPsHC.selectTypeToInclude = LTypeSelect
     selectSNPsHC.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
     selectSNPsHC.out = "HaplotypeCaller_biallelic_true_SNPS.qual.filtered.vcf"
     add(selectSNPsHC)
  
-    val selectIndelsHC = new SelectVariants with UnifiedGenotyperArguments
+    val selectIndelsHC = new SelectVariants with  HaplotypeCallerArguments
     selectIndelsHC.variant =  hc.out
+    selectIndelsHC.scatterCount = 20
     selectIndelsHC.select = Seq("QD > 2.0 && FS < 200.0 && ReadPosRankSum > -8.0")
     selectIndelsHC.selectTypeToInclude = LtypeSelect2
     selectIndelsHC.restrictAllelesTo = org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC

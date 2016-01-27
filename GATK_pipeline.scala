@@ -138,10 +138,10 @@ class pipeline extends QScript {
     val brhc = new HaplotypeCaller with GATK_pipeline
 
     brhc.scatterCount = 250
-    brhc.nct = 4
-    brhc.memoryLimit = 32
+    brhc.nct = 3
+    brhc.memoryLimit = 7
     brhc.input_file ++= realignedFiles
-    brhc.jobResourceRequests = Seq("vf=32g")
+    brhc.jobResourceRequests = Seq("vf=7g")
     brhc.out = "recalibration_HaplotypeCallerVariations.vcf"
 
     add(brhc)
@@ -155,15 +155,28 @@ class pipeline extends QScript {
     selectSNPsHC.restrictAllelesTo =  org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
     selectSNPsHC.out = "recalibrationSNPS.vcf"
     add(selectSNPsHC)
+
+    val selectIndelsHC1 = new SelectVariants with GATK_pipeline
+    selectIndelsHC1.variant =  brhc.out
+    selectIndelsHC1.scatterCount = 20
+    selectIndelsHC1.select = Seq("QD > 2.0 && FS < 200.0 && ReadPosRankSum > -8.0")
+    selectIndelsHC1.selectTypeToInclude = LtypeSelect2
+    selectIndelsHC1.restrictAllelesTo = org.broadinstitute.gatk.tools.walkers.variantutils.SelectVariants.NumberAlleleRestriction.BIALLELIC
+    selectIndelsHC1.out = "recalibrationIndels.vcf"
+    add(selectIndels1HC)
+
+    var recalFiles: List[File] = Nil
+    recalFiles :+=  selectSNPsHC.out
+    recalFiles :+=  selectIndelsHC1.out
  
 // first round BQRS
     val baseRecal = new BaseRecalibrator with GATK_pipeline
 
     baseRecal.input_file ++= realignedFiles
-    baseRecal.knownSites = Seq(selectSNPsHC.out)
+    baseRecal.knownSites = recalFiles
     baseRecal.scatterCount = 200
     baseRecal.memoryLimit = 4
-    baseRecal.nct = 4
+    baseRecal.nct = 3
     baseRecal.jobResourceRequests = Seq("vf=4g")
     baseRecal.out = "recalibration_report.grp"
 
@@ -174,10 +187,10 @@ class pipeline extends QScript {
     val post_baseRecal = new BaseRecalibrator with GATK_pipeline
 
     post_baseRecal.input_file ++= realignedFiles
-    post_baseRecal.knownSites = Seq(selectSNPsHC.out)
+    post_baseRecal.knownSites = recalFiles
     post_baseRecal.scatterCount = 200
     post_baseRecal.memoryLimit = 4
-    post_baseRecal.nct = 4
+    post_baseRecal.nct = 3
     post_baseRecal.BQSR = baseRecal.out
     post_baseRecal.jobResourceRequests = Seq("vf=4g")
     post_baseRecal.out = "post_recalibration_report.grp"
@@ -200,9 +213,9 @@ class pipeline extends QScript {
     printReads.input_file ++= realignedFiles
     printReads.BQSR = baseRecal.out
     printReads.scatterCount = 20
-    printReads.nct = 8
-    printReads.memoryLimit = 4
-    printReads.jobResourceRequests = Seq("vf=4g")
+    printReads.nct = 7
+    printReads.memoryLimit = 3
+    printReads.jobResourceRequests = Seq("vf=3g")
 
     printReads.out = "recalibrated.bam"
 
@@ -219,9 +232,9 @@ class pipeline extends QScript {
     val hc = new HaplotypeCaller with GATK_pipeline
 
     hc.scatterCount = 500
-    hc.nct = 4
-    hc.memoryLimit = 32
-    hc.jobResourceRequests = Seq("vf=32g")
+    hc.nct = 3
+    hc.memoryLimit = 7
+    hc.jobResourceRequests = Seq("vf=7g")
 
     hc.input_file = List[File](printReads.out)
     hc.out = "HaplotypeCallerVariations.vcf"
